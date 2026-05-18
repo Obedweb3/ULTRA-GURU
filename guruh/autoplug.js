@@ -99,15 +99,12 @@ evt.on('messages.upsert', async (sock, m) => {
                     }
                 };
 
-                // Only trigger when the session linker themselves acts (fromMe)
-                if (!fromMe) return;
-
-                // Destination = session linker's own saved-messages DM (sock.user.id)
+                // Destination = session linker's own DM — always sock.user.id
                 const botNum = (sock?.user?.id || getBotJid(sock)).split('@')[0].split(':')[0];
-                const ownerSelfJid = botNum + '@s.whatsapp.net';
-                const triggererNum = botNum;
+                const linkerJid = botNum + '@s.whatsapp.net';
 
-                // Trigger 1 — linker replies to a view-once
+                // Trigger 1 — anyone replies to a view-once
+                // (linker replies: fromMe=true; or check the quoted content directly)
                 if (msg?.extendedTextMessage?.contextInfo?.quotedMessage) {
                     const quoted = msg.extendedTextMessage.contextInfo.quotedMessage;
                     const vv = extractVV(quoted);
@@ -118,19 +115,24 @@ evt.on('messages.upsert', async (sock, m) => {
                         const vvFinal = extractVV({ viewOnceMessage: { message: sourceMsg } })
                             || extractVV({ viewOnceMessageV2: { message: sourceMsg } })
                             || vv;
-                        await sendVV(vvFinal.content, vvFinal.type, ownerSelfJid, triggererNum);
+                        // Only act if the linker is the one replying (fromMe) or explicit senderJid match
+                        const replierNum = (m.key.participant || m.key.remoteJid || '').split('@')[0].split(':')[0];
+                        if (fromMe || replierNum === botNum) {
+                            await sendVV(vvFinal.content, vvFinal.type, linkerJid, botNum);
+                        }
                     }
                 }
 
-                // Trigger 2 — owner reacts to a view-once
+                // Trigger 2 — anyone reacts to a view-once
                 if (msg?.reactionMessage) {
                     const reactKey = msg.reactionMessage.key;
-                    if (reactKey?.id) {
+                    const reactorNum = (m.key.participant || m.key.remoteJid || '').split('@')[0].split(':')[0];
+                    if (reactKey?.id && (fromMe || reactorNum === botNum)) {
                         const original = loadMsg(reactKey.remoteJid || jid, reactKey.id);
                         if (original?.message) {
                             const vv = extractVV(original.message);
                             if (vv) {
-                                await sendVV(vv.content, vv.type, ownerSelfJid, triggererNum);
+                                await sendVV(vv.content, vv.type, linkerJid, botNum);
                             }
                         }
                     }
