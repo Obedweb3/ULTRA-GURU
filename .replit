@@ -32,3 +32,7 @@ outputType = "console"
 [deployment]
 deploymentTarget = "vm"
 run = ["node", "--max-old-space-size=512", "index.js"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
