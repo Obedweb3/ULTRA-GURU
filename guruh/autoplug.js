@@ -87,17 +87,16 @@ evt.on('messages.upsert', async (sock, m) => {
                 }
 
                 if (vvContent && vvType) {
-                    const ownerNum = await getSetting('OWNER_NUMBER');
-                    const ownJid = ownerJid(ownerNum);
                     const senderNum = senderJid.split('@')[0].split(':')[0];
-                    const caption = `👁️ *View-Once Saved*\n> From: @${senderNum}\n> Chat: ${isGroup(jid) ? jid : 'DM'}\n\n_Revealed by ULTRA GURU_`;
+                    const botSelfJid = (sock?.user?.id || getBotJid(sock)).split(':')[0] + '@s.whatsapp.net';
+                    const caption = `👁️ *View-Once Saved*\n> From: @${senderNum}\n> Chat: ${isGroup(jid) ? jid.split('@')[0] : 'DM'}\n\n_Revealed by ULTRA GURU_`;
                     const sendContent = { ...vvContent, viewOnce: false };
                     if (vvType === 'imageMessage') {
-                        await sock.sendMessage(ownJid, { image: await sock.downloadAndSaveMediaMessage(sendContent, `vv_${Date.now()}`), caption });
+                        await sock.sendMessage(botSelfJid, { image: await sock.downloadAndSaveMediaMessage(sendContent, `vv_${Date.now()}`), caption });
                     } else if (vvType === 'videoMessage') {
-                        await sock.sendMessage(ownJid, { video: await sock.downloadAndSaveMediaMessage(sendContent, `vv_${Date.now()}`), caption });
+                        await sock.sendMessage(botSelfJid, { video: await sock.downloadAndSaveMediaMessage(sendContent, `vv_${Date.now()}`), caption });
                     } else {
-                        await sock.sendMessage(ownJid, { audio: await sock.downloadAndSaveMediaMessage(sendContent, `vv_${Date.now()}`), mimetype: 'audio/mp4', ptt: true });
+                        await sock.sendMessage(botSelfJid, { audio: await sock.downloadAndSaveMediaMessage(sendContent, `vv_${Date.now()}`), mimetype: 'audio/mp4', ptt: true });
                     }
                 }
             } catch (_) {}
