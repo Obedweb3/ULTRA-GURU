@@ -30,26 +30,31 @@ const { sendButtons } = require("gifted-btns");
 
 const BASE = "https://apis.davidcyril.name.ng";
 
-// Audio APIs — /song uses query= (search or URL), savetube/clipto use url=
+// Audio APIs — only endpoints that return actual MP3/audio files
+// savetube is intentionally excluded here (it returns VIDEO mp4)
 const getAudioApis = (url, query) => [
-    `${BASE}/song?query=${encodeURIComponent(query || url)}`,
-    `${BASE}/download/savetube?url=${encodeURIComponent(url)}`,
-    `${BASE}/download/clipto?url=${encodeURIComponent(url)}`,
+    { url: `${BASE}/song?query=${encodeURIComponent(query || url)}`, timeout: 15000 },
+    { url: `${BASE}/play?query=${encodeURIComponent(query || url)}`, timeout: 15000 },
+    { url: `${BASE}/download/clipto?url=${encodeURIComponent(url)}`, timeout: 20000, audioOnly: true },
 ];
 
 // Video APIs
 const getVideoApis = (url) => [
-    `${BASE}/download/savetube?url=${encodeURIComponent(url)}`,
-    `${BASE}/download/clipto?url=${encodeURIComponent(url)}`,
-    `${BASE}/download/aiov3?url=${encodeURIComponent(url)}`,
+    { url: `${BASE}/download/savetube?url=${encodeURIComponent(url)}`, timeout: 20000 },
+    { url: `${BASE}/download/clipto?url=${encodeURIComponent(url)}`, timeout: 20000 },
+    { url: `${BASE}/download/aiov3?url=${encodeURIComponent(url)}`, timeout: 20000 },
 ];
 
 const isValidBuffer = (buf) => Buffer.isBuffer(buf) && buf.length > 0x2800;
 
-async function queryAPI(url, endpoints, timeout = 0x7530) {
+async function queryAPI(url, endpoints) {
     const errors = [];
 
-    for (const endpoint of endpoints) {
+    for (const ep of endpoints) {
+        const endpoint = typeof ep === 'string' ? ep : ep.url;
+        const timeout = typeof ep === 'object' ? ep.timeout : 20000;
+        const audioOnly = typeof ep === 'object' ? ep.audioOnly : false;
+
         try {
             console.log(`🔄 Trying API: ${endpoint}`);
             const response = await axios.get(endpoint, { timeout });
@@ -76,7 +81,19 @@ async function queryAPI(url, endpoints, timeout = 0x7530) {
 
             // Format: { success: true, data: { medias: [...], title, thumbnail } }
             } else if (d.success === true && Array.isArray(d.data?.medias)) {
-                const media = d.data.medias.find(m => m.is_audio && m.url) || d.data.medias.find(m => m.url);
+                // For audio: prefer smallest mp4 (has audio track). For video: prefer mp4 video
+                let media;
+                if (audioOnly) {
+                    // Pick format with audio — prefer mp4 formats that include audio
+                    media = d.data.medias.find(m => m.url && m.ext === 'mp4' && m.is_audio)
+                         || d.data.medias.find(m => m.url && m.is_audio)
+                         || d.data.medias.find(m => m.url);
+                } else {
+                    // For video: prefer mp4 at reasonable quality (360p or 720p)
+                    media = d.data.medias.find(m => m.url && m.ext === 'mp4' && m.height <= 720 && !m.is_audio)
+                         || d.data.medias.find(m => m.url && m.ext === 'mp4')
+                         || d.data.medias.find(m => m.url);
+                }
                 if (media) {
                     downloadUrl = media.url;
                     title = d.data.title;
@@ -172,7 +189,7 @@ gmd(
       await react("🔍");
 
       const audioApis = getAudioApis(videoUrl, searchQuery);
-      const result = await queryAPI(videoUrl, audioApis, 0x7530);
+      const result = await queryAPI(videoUrl, audioApis);
 
       if (!result.success) {
         await react("❌");
@@ -338,7 +355,7 @@ gmd(
       await react("🔍");
 
       const videoApis = getVideoApis(videoUrl);
-      const result = await queryAPI(videoUrl, videoApis, 0x7530);
+      const result = await queryAPI(videoUrl, videoApis);
 
       if (!result.success) {
         await react("❌");
