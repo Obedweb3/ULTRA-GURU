@@ -1,32 +1,9 @@
 const { gmd } = require("../guru");
 const yts = require("yt-search");
 const axios = require("axios");
-const { sendButtons } = require("gifted-btns");
 
 const API_BASE = "https://apis.davidcyril.name.ng";
 const API_TIMEOUT = 25000;
-
-function extractButtonId(msg) {
-    if (!msg) return null;
-
-    const text = msg.conversation || msg.extendedTextMessage?.text || '';
-    if (text && /^(audio_|doc_)play_/.test(text)) return text.trim();
-
-    if (msg.templateButtonReplyMessage?.selectedId)
-        return msg.templateButtonReplyMessage.selectedId;
-    if (msg.buttonsResponseMessage?.selectedButtonId)
-        return msg.buttonsResponseMessage.selectedButtonId;
-    if (msg.listResponseMessage?.singleSelectReply?.selectedRowId)
-        return msg.listResponseMessage.singleSelectReply.selectedRowId;
-    if (msg.interactiveResponseMessage) {
-        const nf = msg.interactiveResponseMessage.nativeFlowResponseMessage;
-        if (nf?.paramsJson) {
-            try { const p = JSON.parse(nf.paramsJson); if (p.id) return p.id; } catch {}
-        }
-        return msg.interactiveResponseMessage.buttonId || null;
-    }
-    return null;
-}
 
 async function fetchAudio(query) {
     const url = `${API_BASE}/play?query=${encodeURIComponent(query)}`;
@@ -54,7 +31,7 @@ gmd(
         description: "Download Audio from YouTube",
     },
     async (from, Gifted, conText) => {
-        const { q, reply, react, botPic, botName, botFooter, gmdBuffer, formatAudio } = conText;
+        const { q, reply, react, botPic, gmdBuffer, formatAudio } = conText;
 
         if (!q) {
             await react("❌");
@@ -100,8 +77,8 @@ gmd(
 
             const title = apiResult.title || videoTitle;
             const duration = apiResult.duration || videoDuration;
-            const thumbnail = apiResult.thumbnail || videoThumbnail;
-            const watchUrl = apiResult.video_url || videoUrl;
+
+            await react("⬇️");
 
             const buffer = await gmdBuffer(apiResult.download_url);
 
@@ -110,90 +87,23 @@ gmd(
                 return reply("❌ Failed to download audio. Please try again.");
             }
 
-            if (buffer.length > 60 * 1024 * 1024) {
-                await react("📄");
-                const converted = await formatAudio(buffer);
-                await Gifted.sendMessage(from, {
-                    document: converted,
-                    mimetype: "audio/mpeg",
-                    fileName: `${title.replace(/[^\w\s.-]/gi, "")}.mp3`,
-                    caption: `🎵 *${title}*\n⏱️ ${duration}\n\n_File too large — sent as document_`,
-                });
-                await react("✅");
-                return;
-            }
+            const converted = await formatAudio(buffer);
+            const safeTitle = title.replace(/[^\w\s.-]/gi, "");
 
-            const dateNow = Date.now();
-            const buttonId = `play_${dateNow}`;
-
-            await sendButtons(Gifted, from, {
-                title: `${botName} 🎵 SONG DOWNLOADER`,
-                text: `🎶 *Title:* ${title}\n⏱️ *Duration:* ${duration}\n\n*Select download format:*`,
-                footer: botFooter,
-                image: { url: thumbnail },
-                buttons: [
-                    { id: `audio_${buttonId}`, text: "Audio 🎵" },
-                    { id: `doc_${buttonId}`,   text: "Document 📄" },
-                    {
-                        name: "cta_url",
-                        buttonParamsJson: JSON.stringify({
-                            display_text: "▶️ Watch on YouTube",
-                            url: watchUrl,
-                        }),
-                    },
-                ],
+            await Gifted.sendMessage(from, {
+                audio: converted,
+                mimetype: "audio/mpeg",
+                ptt: false,
             });
 
-            const handleResponse = async (event) => {
-                const messageData = event.messages[0];
-                if (!messageData?.message) return;
+            await Gifted.sendMessage(from, {
+                document: converted,
+                mimetype: "audio/mpeg",
+                fileName: `${safeTitle}.mp3`,
+                caption: `🎵 *${title}*\n⏱️ *Duration:* ${duration}`,
+            });
 
-                const selectedId = extractButtonId(messageData.message);
-                if (!selectedId) return;
-
-                const isFromSameChat = messageData.key?.remoteJid === from;
-                if (!isFromSameChat || !selectedId.includes(dateNow.toString())) return;
-
-                Gifted.ev.off("messages.upsert", handleResponse);
-                await react("⬇️");
-
-                try {
-                    const converted = await formatAudio(buffer);
-
-                    if (selectedId.startsWith("audio_")) {
-                        await Gifted.sendMessage(
-                            from,
-                            { audio: converted, mimetype: "audio/mpeg", ptt: false },
-                            { quoted: messageData }
-                        );
-                    } else if (selectedId.startsWith("doc_")) {
-                        await Gifted.sendMessage(
-                            from,
-                            {
-                                document: converted,
-                                mimetype: "audio/mpeg",
-                                fileName: `${title.replace(/[^\w\s.-]/gi, "")}.mp3`,
-                                caption: `🎵 ${title}`,
-                            },
-                            { quoted: messageData }
-                        );
-                    } else {
-                        return;
-                    }
-
-                    await react("✅");
-                } catch (err) {
-                    console.error("[play] Send error:", err.message);
-                    await react("❌");
-                    await Gifted.sendMessage(from, { text: "❌ Failed to send audio. Please try again." }, { quoted: messageData });
-                }
-            };
-
-            Gifted.ev.on("messages.upsert", handleResponse);
-
-            setTimeout(() => {
-                Gifted.ev.off("messages.upsert", handleResponse);
-            }, 5 * 60 * 1000);
+            await react("✅");
 
         } catch (error) {
             console.error("[play] Unexpected error:", error.message);
