@@ -11,7 +11,8 @@
   "scripts": {
     "start": "node --max-old-space-size=512 index.js",
     "dev": "node --max-old-space-size=512 index.js",
-    "heroku-prebuild": "npm install --legacy-peer-deps --no-audit --no-fund --no-package-lock"
+    "heroku-prebuild": "npm install --legacy-peer-deps --no-audit --no-fund --no-package-lock",
+    "replit-install": "PYTHONPATH=$(python3 -c 'import setuptools; import os; print(os.path.dirname(os.path.dirname(setuptools.__file__)))' 2>/dev/null || echo '') npm install --legacy-peer-deps --no-audit --no-fund"
   },
   "keywords": [
     "gurutech",
@@ -26,13 +27,15 @@
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@hapi/boom": "^10.0.1",
+    "@img/sharp-linux-x64": "^0.35.2",
     "@vitalets/google-translate-api": "^9.2.1",
-    "@whiskeysockets/baileys": "github:WhiskeySockets/Baileys",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
     "acrcloud": "^1.4.0",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.5.18",
+    "archiver": "^8.0.0",
     "audio-decode": "^2.2.3",
     "axios": "^1.15.2",
-    "baileys": "github:WhiskeySockets/Baileys",
+    "baileys": "npm:@whiskeysockets/baileys@^7.0.0-rc.9",
     "better-sqlite3": "^12.9.0",
     "body-parser": "^2.2.2",
     "buffer": "^6.0.3",
@@ -52,11 +55,12 @@
     "node-cache": "^5.1.2",
     "node-fetch": "^3.3.2",
     "path": "latest",
+    "pdfkit": "^0.19.1",
     "pg": "^8.20.0",
     "pino": "^7.0.5",
     "qrcode-terminal": "^0.12.0",
     "sequelize": "^6.37.8",
-    "sharp": "^0.32.6",
+    "sharp": "^0.33.5",
     "sqlite3": "^5.1.7",
     "stream": "*",
     "util": "^0.12.5",
@@ -67,7 +71,10 @@
     "url": "git+https://github.com/GuruhTech/ULTRA-GURU.git"
   },
   "bugs": {
-    "url": "https://github.com/GuruhTech/ULTRA-GURU-/issues"
+    "url": "https://github.com/GuruhTech/ULTRA-GURU/issues"
   },
-  "homepage": "https://github.com/GuruhTech/ULTRA-GURU#readme"
+  "homepage": "https://github.com/GuruhTech/ULTRA-GURU#readme",
+  "devDependencies": {
+    "javascript-obfuscator": "^5.4.3"
+  }
 }
