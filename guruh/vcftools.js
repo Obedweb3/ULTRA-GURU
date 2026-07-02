@@ -3,6 +3,25 @@ const { gmd } = require("../guru");
 // In-memory merge queues: Map<chatJid, { files: Buffer[], names: string[] }>
 const mergeQueues = new Map();
 
+/**
+ * Unwrap ephemeral / view-once / document-with-caption wrappers to find
+ * the actual documentMessage inside a message object.
+ * WhatsApp frequently wraps quoted docs like this, so this MUST run
+ * before checking for `.documentMessage` directly.
+ */
+function unwrapDocMessage(msg) {
+    if (!msg) return null;
+
+    let m = msg;
+    if (m.ephemeralMessage?.message) m = m.ephemeralMessage.message;
+    if (m.viewOnceMessage?.message) m = m.viewOnceMessage.message;
+    if (m.viewOnceMessageV2?.message) m = m.viewOnceMessageV2.message;
+    if (m.viewOnceMessageV2Extension?.message) m = m.viewOnceMessageV2Extension.message;
+    if (m.documentWithCaptionMessage?.message) m = m.documentWithCaptionMessage.message;
+
+    return m.documentMessage || null;
+}
+
 // ─── VCF DEDUPLICATION TOOL ──────────────────────────────────────────────────
 
 /**
@@ -106,7 +125,7 @@ gmd(
         react: "🗂️",
     },
     async (from, Gifted, conText) => {
-        const { mek, reply, conn, getMediaBuffer } = conText;
+        const { mek, reply, getMediaBuffer } = conText;
 
         // ── Find the VCF document ──────────────────────────────────────────
         // Support: replying to a VCF, or the message itself containing a VCF
@@ -118,8 +137,8 @@ gmd(
         const quotedRaw = ctx?.quotedMessage || null;
 
         const docMsg =
-            quotedRaw?.documentMessage ||
-            mek.message?.documentMessage ||
+            unwrapDocMessage(quotedRaw) ||
+            unwrapDocMessage(mek.message) ||
             null;
 
         if (!docMsg) {
@@ -180,18 +199,22 @@ gmd(
         const outName = `${origName}_cleaned.vcf`;
 
         // ── Send back ─────────────────────────────────────────────────────
-        await conn.sendMessage(from, {
+        // Sent with NO caption so the file stays a clean, raw .vcf that the
+        // user can forward/share as-is without dragging a caption along.
+        await Gifted.sendMessage(from, {
             document: cleanedBuffer,
             fileName: outName,
             mimetype: "text/vcard",
-            caption:
-                `✅ *VCF Cleaned Successfully!*\n\n` +
-                `📇 Original contacts: *${cards.length}*\n` +
-                `🗑️ Duplicates removed: *${removed}*\n` +
-                `📋 Clean contacts: *${kept.length}*\n` +
-                `📞 Phone numbers scanned: *${totalPhones}*\n\n` +
-                `_All original contact details preserved. Only duplicate numbers removed._`,
         }, { quoted: mek });
+
+        await reply(
+            `✅ *VCF Cleaned Successfully!*\n\n` +
+            `📇 Original contacts: *${cards.length}*\n` +
+            `🗑️ Duplicates removed: *${removed}*\n` +
+            `📋 Clean contacts: *${kept.length}*\n` +
+            `📞 Phone numbers scanned: *${totalPhones}*\n\n` +
+            `_All original contact details preserved. Only duplicate numbers removed._`
+        );
     }
 );
 
@@ -210,7 +233,7 @@ gmd(
         react: "📂",
     },
     async (from, Gifted, conText) => {
-        const { mek, reply, conn, getMediaBuffer, args } = conText;
+        const { mek, reply, getMediaBuffer, args } = conText;
 
         const sub = (args[0] || "").toLowerCase().trim();
 
@@ -254,8 +277,8 @@ gmd(
 
             const quotedRaw = ctx?.quotedMessage || null;
             const docMsg =
-                quotedRaw?.documentMessage ||
-                mek.message?.documentMessage ||
+                unwrapDocMessage(quotedRaw) ||
+                unwrapDocMessage(mek.message) ||
                 null;
 
             if (!docMsg) {
@@ -338,20 +361,22 @@ gmd(
             const mergedBuffer = Buffer.from(mergedVcf, "utf8");
             const outName = `merged_contacts_${Date.now()}.vcf`;
 
-            await conn.sendMessage(from, {
+            await Gifted.sendMessage(from, {
                 document: mergedBuffer,
                 fileName: outName,
                 mimetype: "text/vcard",
-                caption:
-                    `✅ *VCF Merge Complete!*\n\n` +
-                    `📂 Files merged: *${q.files.length}*\n` +
-                    `${fileBreakdown}\n` +
-                    `📇 Total contacts combined: *${allCards.length}*\n` +
-                    `🗑️ Duplicates removed: *${removed}*\n` +
-                    `📋 Final unique contacts: *${kept.length}*\n` +
-                    `📞 Phone numbers scanned: *${totalPhones}*\n\n` +
-                    `_All original details preserved. Queue has been cleared._`,
             }, { quoted: mek });
+
+            await reply(
+                `✅ *VCF Merge Complete!*\n\n` +
+                `📂 Files merged: *${q.files.length}*\n` +
+                `${fileBreakdown}\n` +
+                `📇 Total contacts combined: *${allCards.length}*\n` +
+                `🗑️ Duplicates removed: *${removed}*\n` +
+                `📋 Final unique contacts: *${kept.length}*\n` +
+                `📞 Phone numbers scanned: *${totalPhones}*\n\n` +
+                `_All original details preserved. Queue has been cleared._`
+            );
 
             // Clear the queue after successful merge
             mergeQueues.delete(from);
